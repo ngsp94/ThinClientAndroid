@@ -1,43 +1,73 @@
 package com.insertcoin.cloudygamethinclient;
 
-import android.content.Context;
 import android.util.Log;
-
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.ByteBuffer;
 
 public class H264StreamThread extends Thread {
 
     static final String TAG = "H264StreamThread";
     static final int LOG_LEN = 80;
     static final byte[] START_CODE = {0, 0, 0, 1}; // H.264 start code
+    static final byte SPS_CODE = 0x67;
+    static final byte PPS_CODE = 0x68;
 
     BufferedInputStream stream = null;
     MainActivity.Conf configs;
+    ByteBuffer sps = null;
+    ByteBuffer pps = null;
 
     public H264StreamThread(MainActivity.Conf conf) {
         configs = conf;
+    }
+
+    public boolean headersReady() {
+        return ((sps != null) && (pps != null));
+    }
+
+    public ByteBuffer getSPS() {
+        return sps;
+    }
+
+    public ByteBuffer getPPS() {
+        return pps;
+    }
+
+    public void close() {
+        try {
+            stream.close();
+        } catch (IOException e) {
+            log(Log.getStackTraceString(e));
+        }
     }
 
     public void run() {
         try {
             URLConnection conn = (new URL(configs.ip)).openConnection();
             stream = new BufferedInputStream(conn.getInputStream());
-            byte[] pkt = nextPacket();
-            while (true) {
-                if (pkt != null)
-                    log(pkt);
-                pkt = nextPacket();
-            }
+            do {
+                byte[] packet = nextPacket();
+                if (packet[START_CODE.length] == SPS_CODE) {
+                    //log("Got SPS!");
+                    //log(packet);
+                    sps = ByteBuffer.wrap(packet);
+                }
+                else if (packet[START_CODE.length] == PPS_CODE) {
+                    //log("Got PPS!");
+                    //log(packet);
+                    pps = ByteBuffer.wrap(packet);
+                }
+            } while (sps == null || pps == null);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private byte[] nextPacket() throws IOException {
+    public byte[] nextPacket() throws IOException {
 
         ByteArrayOutputStream packet = null;
 
@@ -93,6 +123,13 @@ public class H264StreamThread extends Thread {
         StringBuilder sb = new StringBuilder();
         for (byte b : arr)
             sb.append(String.format("%02X ", b));
+        log(sb.toString());
+    }
+
+    void log(ByteBuffer buf) {
+        StringBuilder sb = new StringBuilder();
+        for (int i=0; i<buf.limit(); i++)
+            sb.append(String.format("%02X ", buf.get(i)));
         log(sb.toString());
     }
 }
