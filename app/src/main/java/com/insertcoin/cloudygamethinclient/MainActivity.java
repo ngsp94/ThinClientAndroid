@@ -18,21 +18,16 @@ import java.util.Properties;
 public class MainActivity extends AppCompatActivity
         implements TextureView.SurfaceTextureListener{
 
-    class Conf{
-        static final String HOST_IP = "ip";
-    }
-
     static final String TAG = "Main";
-    static final int LOG_WIDTH = 100;
 
-    Properties properties;
+    public static Conf configs;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         try {
-            loadProperties();
+            configs = this.new Conf();
         } catch (IOException e) {
             log(Log.getStackTraceString(e));
             System.exit(-1);
@@ -40,36 +35,13 @@ public class MainActivity extends AppCompatActivity
             log("Missing config: " + e.getMessage());
             System.exit(-1);
         }
-    }
-
-    void loadProperties() throws IOException, IllegalAccessException {
-        InputStream configs = getResources().openRawResource(R.raw.cloudy);
-        properties = new Properties();
-        properties.load(configs);
-        if (!(properties.containsKey(Conf.HOST_IP))) {
-            throw new IllegalAccessException(Conf.HOST_IP);
-        }
+        H264StreamThread networkThread = new H264StreamThread(configs);
+        networkThread.start();
     }
 
     @Override
     public void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture, int i, int i1) {
 
-        Thread networkThread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    URL url = new URL(properties.getProperty(Conf.HOST_IP));
-                    URLConnection conn = url.openConnection();
-                    // TODO: move this to own class with getters
-                    BufferedInputStream bis =
-                            new BufferedInputStream(conn.getInputStream());
-                } catch (MalformedURLException e) {
-                    log(Log.getStackTraceString(e));
-                } catch (IOException e) {
-                    log(Log.getStackTraceString(e));
-                }
-            }
-        });
     }
 
     @Override
@@ -87,10 +59,34 @@ public class MainActivity extends AppCompatActivity
 
     }
 
-    // Can log long messages with line breaks
-    static void log(String msg) {
-        for (int i=0; i<=msg.length(); i+=LOG_WIDTH)
-            Log.d(TAG, msg.substring(i, Math.min(msg.length(), i+LOG_WIDTH)));
+    /* Helper methods */
+    void log(String msg) {
+        if (configs.showLog)
+            Log.d(TAG, msg);
     }
 
+    /* Configurations for this app */
+    class Conf{
+
+        // keys
+        private static final String IP = "ip";
+        private static final String SHOW_LOG = "showLog";
+
+        // properties
+        public String ip = "";
+        public Boolean showLog = false;
+
+        Properties properties;
+
+        public Conf() throws IOException, IllegalAccessException {
+            InputStream configs = getResources().openRawResource(R.raw.cloudy);
+            properties = new Properties();
+            properties.load(configs);
+            if (!(properties.containsKey(IP)))
+                throw new IllegalAccessException(IP);
+
+            ip = properties.getProperty(IP);
+            showLog = Boolean.parseBoolean(properties.getProperty(SHOW_LOG));
+        }
+    }
 }
