@@ -11,7 +11,7 @@ import java.nio.ByteBuffer;
 public class H264StreamThread extends Thread {
 
     static final String TAG = "H264StreamThread";
-    static final int LOG_LEN = 80;
+    static final int LOG_LEN = 200;
     static final byte[] START_CODE = {0, 0, 0, 1}; // H.264 start code
     static final byte SPS_CODE = 0x67;
     static final byte PPS_CODE = 0x68;
@@ -52,13 +52,13 @@ public class H264StreamThread extends Thread {
             do {
                 byte[] packet = nextPacket();
                 if (packet[START_CODE.length] == SPS_CODE) {
-                    //log("Got SPS!");
-                    //log(packet);
+                    log("Got SPS!");
+                    log(packet);
                     sps = ByteBuffer.wrap(packet);
                 }
                 else if (packet[START_CODE.length] == PPS_CODE) {
-                    //log("Got PPS!");
-                    //log(packet);
+                    log("Got PPS!");
+                    log(packet);
                     pps = ByteBuffer.wrap(packet);
                 }
             } while (sps == null || pps == null);
@@ -68,12 +68,10 @@ public class H264StreamThread extends Thread {
     }
 
     public byte[] nextPacket() throws IOException {
-
         ByteArrayOutputStream packet = null;
 
         while (packet == null) {
             byte readBuf[] = new byte[START_CODE.length];
-            // TODO: check if ok to omit bytearrayoutputstream size
             packet = new ByteArrayOutputStream();
             packet.write(START_CODE);
 
@@ -86,22 +84,22 @@ public class H264StreamThread extends Thread {
                 continue;
             }
 
-            while (stream.available() > 0) {
-                if (equals(readBuf, START_CODE, head))
+            while (true) {
+                if (equals(readBuf, START_CODE, head)) {
                     return packet.toByteArray();
-                else {
+                } else {
                     packet.write(readBuf[head]);
-                    readBuf[head] = (byte) stream.read();
+                    readBuf[head] = (byte) stream.read(); // blocking call
                 }
                 head = (head + 1) % START_CODE.length;
             }
         }
-        return packet.toByteArray();
+        return null; // should never reach this state because of while (true)
     }
 
     /* Helper Methods */
 
-    // Check equivalence of all elements, with an offset on the first array
+    // Check equivalence of elements, with an offset on a
     static boolean equals(byte[] a, byte[] b, int offset) {
         for (int i=0; i<a.length; i++) {
             if (a[(i + offset) % a.length] != b[i])
@@ -113,7 +111,7 @@ public class H264StreamThread extends Thread {
     // Can log long messages with line breaks
     void log(String msg) {
         if (configs.showLog) {
-            for (int i = 0; i <= msg.length(); i += 100)
+            for (int i = 0; i <= msg.length(); i += LOG_LEN)
                 Log.d(TAG, msg.substring(i, Math.min(msg.length(), i+LOG_LEN)));
         }
     }
@@ -123,13 +121,6 @@ public class H264StreamThread extends Thread {
         StringBuilder sb = new StringBuilder();
         for (byte b : arr)
             sb.append(String.format("%02X ", b));
-        log(sb.toString());
-    }
-
-    void log(ByteBuffer buf) {
-        StringBuilder sb = new StringBuilder();
-        for (int i=0; i<buf.limit(); i++)
-            sb.append(String.format("%02X ", buf.get(i)));
         log(sb.toString());
     }
 }

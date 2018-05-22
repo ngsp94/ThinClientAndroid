@@ -10,6 +10,7 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.Surface;
 import android.view.TextureView;
+import android.view.Window;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -30,8 +31,9 @@ public class MainActivity extends AppCompatActivity
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        requestWindowFeature(Window.FEATURE_NO_TITLE); // remove title bar
         setContentView(R.layout.activity_main);
-        texView = (TextureView) findViewById(R.id.textureView);
+        texView = findViewById(R.id.textureView);
         texView.setSurfaceTextureListener(this);
         try {
             configs = this.new Conf();
@@ -49,11 +51,10 @@ public class MainActivity extends AppCompatActivity
 
     private class DecodeTask extends AsyncTask<Void, Void, Void> {
         byte[] frame;
-        boolean consumed = false;
+        boolean consumed;
 
         @Override
         protected Void doInBackground(Void... voids) {
-
             MediaFormat format = MediaFormat.createVideoFormat(
                     AVC, configs.width, configs.height);
             format.setByteBuffer("csd-0", streamThread.getSPS());
@@ -61,13 +62,6 @@ public class MainActivity extends AppCompatActivity
 
             try {
                 decoder = MediaCodec.createDecoderByType(AVC);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-
-            boolean done = false;
-
-            try {
                 frame = streamThread.nextPacket();
             } catch (IOException e) {
                 log(Log.getStackTraceString(e));
@@ -76,11 +70,9 @@ public class MainActivity extends AppCompatActivity
             decoder.setCallback(new MediaCodec.Callback() {
                 @Override
                 public void onInputBufferAvailable(@NonNull MediaCodec mc, int i) {
-                    log("Input buffer: " + i);
                     ByteBuffer inputBuffer = decoder.getInputBuffer(i);
-                    while (consumed) { // wait for next frame to be ready
-                        sleep(5);
-                    }
+                    while (consumed)
+                        sleep(3);
                     inputBuffer.put(frame);
                     decoder.queueInputBuffer(i, 0, frame.length, 0, 0);
                     consumed = true;
@@ -89,9 +81,7 @@ public class MainActivity extends AppCompatActivity
                 @Override
                 public void onOutputBufferAvailable(@NonNull MediaCodec mc, int i,
                                                     @NonNull MediaCodec.BufferInfo bufferInfo) {
-                    log("Output buffer: " + i);
                     decoder.releaseOutputBuffer(i, true);
-
                 }
 
                 @Override
@@ -110,19 +100,18 @@ public class MainActivity extends AppCompatActivity
             Surface surface = new Surface(texView.getSurfaceTexture());
             decoder.configure(format, surface, null, 0);
             decoder.start();
+            boolean done = false;
             while (!done) {
-                if (consumed) {
-                    try {
-                        frame = streamThread.nextPacket();
-                        consumed = false;
-                    } catch (IOException e) {
-                        log(Log.getStackTraceString(e));
-                    }
-                } else {
-                    sleep(10);
+                while (!consumed)
+                    sleep(1);
+                try {
+                    frame = streamThread.nextPacket();
+                } catch (IOException e) {
+                    log("Can't get next packet");
+                    log(Log.getStackTraceString(e));
                 }
+                consumed = false;
             }
-
             decoder.stop();
             decoder.release();
             streamThread.close();
@@ -158,13 +147,13 @@ public class MainActivity extends AppCompatActivity
 
     /* Helper methods */
 
-    // log with config control
+    // Log with config control
     void log(String msg) {
         if (configs.showLog)
             Log.d(TAG, msg);
     }
 
-    // less verbose sleep function
+    // Less verbose sleep function
     void sleep(int millisec) {
         try {
             Thread.sleep(millisec);
@@ -175,7 +164,6 @@ public class MainActivity extends AppCompatActivity
 
     /* Configurations for this app */
     class Conf{
-
         // keys
         private static final String IP = "ip";
         private static final String SHOW_LOG = "showLog";
@@ -185,8 +173,8 @@ public class MainActivity extends AppCompatActivity
         // properties
         public String ip = "";
         public boolean showLog = false;
-        public int width = 480;
-        public int height = 320;
+        public int width = 1280;
+        public int height = 720;
 
         Properties properties;
 
