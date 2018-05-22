@@ -52,13 +52,8 @@ public class H264StreamThread extends Thread {
             do {
                 byte[] packet = nextPacket();
                 if (packet[START_CODE.length] == SPS_CODE) {
-                    log("Got SPS!");
-                    log(packet);
                     sps = ByteBuffer.wrap(packet);
-                }
-                else if (packet[START_CODE.length] == PPS_CODE) {
-                    log("Got PPS!");
-                    log(packet);
+                } else if (packet[START_CODE.length] == PPS_CODE) {
                     pps = ByteBuffer.wrap(packet);
                 }
             } while (sps == null || pps == null);

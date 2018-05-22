@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.Properties;
+import java.util.concurrent.ArrayBlockingQueue;
 
 public class MainActivity extends AppCompatActivity
         implements TextureView.SurfaceTextureListener{
@@ -31,7 +32,6 @@ public class MainActivity extends AppCompatActivity
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        requestWindowFeature(Window.FEATURE_NO_TITLE); // remove title bar
         setContentView(R.layout.activity_main);
         texView = findViewById(R.id.textureView);
         texView.setSurfaceTextureListener(this);
@@ -51,7 +51,7 @@ public class MainActivity extends AppCompatActivity
 
     private class DecodeTask extends AsyncTask<Void, Void, Void> {
         byte[] frame;
-        boolean consumed;
+        ArrayBlockingQueue<Integer> inputIndices = new ArrayBlockingQueue<>(30);
 
         @Override
         protected Void doInBackground(Void... voids) {
@@ -70,12 +70,7 @@ public class MainActivity extends AppCompatActivity
             decoder.setCallback(new MediaCodec.Callback() {
                 @Override
                 public void onInputBufferAvailable(@NonNull MediaCodec mc, int i) {
-                    ByteBuffer inputBuffer = decoder.getInputBuffer(i);
-                    while (consumed)
-                        sleep(3);
-                    inputBuffer.put(frame);
-                    decoder.queueInputBuffer(i, 0, frame.length, 0, 0);
-                    consumed = true;
+                    inputIndices.add(i);
                 }
 
                 @Override
@@ -102,15 +97,19 @@ public class MainActivity extends AppCompatActivity
             decoder.start();
             boolean done = false;
             while (!done) {
-                while (!consumed)
-                    sleep(1);
                 try {
                     frame = streamThread.nextPacket();
+                    int i = inputIndices.take();
+                    ByteBuffer inputBuffer = decoder.getInputBuffer(i);
+                    inputBuffer.put(frame);
+                    decoder.queueInputBuffer(i, 0, frame.length, 0, 0);
                 } catch (IOException e) {
-                    log("Can't get next packet");
+                    log("Could not get next packet");
+                    log(Log.getStackTraceString(e));
+                } catch (InterruptedException e) {
+                    log("Input buffer not available");
                     log(Log.getStackTraceString(e));
                 }
-                consumed = false;
             }
             decoder.stop();
             decoder.release();
@@ -121,7 +120,6 @@ public class MainActivity extends AppCompatActivity
 
     @Override
     public void onSurfaceTextureAvailable(SurfaceTexture tex, int w, int h) {
-        log("surfacetex ready");
         while (streamThread == null || !(streamThread.headersReady())) {
             sleep(100);
         }
