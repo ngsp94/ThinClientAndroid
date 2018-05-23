@@ -10,7 +10,6 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.Surface;
 import android.view.TextureView;
-import android.view.Window;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -95,8 +94,7 @@ public class MainActivity extends AppCompatActivity
             Surface surface = new Surface(texView.getSurfaceTexture());
             decoder.configure(format, surface, null, 0);
             decoder.start();
-            boolean done = false;
-            while (!done) {
+            while (!isCancelled()) {
                 try {
                     frame = streamThread.nextPacket();
                     int i = inputIndices.take();
@@ -130,11 +128,16 @@ public class MainActivity extends AppCompatActivity
 
     @Override
     public void onSurfaceTextureSizeChanged(SurfaceTexture surfaceTexture, int i, int i1) {
-
+        log("texture changed, decoding cancelled!");
+        decodeTask.cancel(false);
     }
 
     @Override
     public boolean onSurfaceTextureDestroyed(SurfaceTexture surfaceTexture) {
+        // This is triggered by back button, menu button etc
+        // Can send quit signal here
+        log("texture destroyed, decoding cancelled!");
+        decodeTask.cancel(false);
         return false;
     }
 
