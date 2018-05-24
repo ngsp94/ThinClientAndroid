@@ -41,13 +41,14 @@ public class H264StreamThread extends Thread {
         try {
             stream.close();
         } catch (IOException e) {
-            log(Log.getStackTraceString(e));
+            loge(e);
         }
     }
 
     public void run() {
         try {
-            URLConnection conn = (new URL(configs.ip)).openConnection();
+            URL url = new URL("http", configs.ip, configs.streamPort0, "");
+            URLConnection conn = url.openConnection();
             stream = new BufferedInputStream(conn.getInputStream());
             do {
                 byte[] packet = nextPacket();
@@ -58,7 +59,7 @@ public class H264StreamThread extends Thread {
                 }
             } while (sps == null || pps == null);
         } catch (IOException e) {
-            e.printStackTrace();
+            loge(e);
         }
     }
 
@@ -109,6 +110,11 @@ public class H264StreamThread extends Thread {
             for (int i = 0; i <= msg.length(); i += LOG_LEN)
                 Log.d(TAG, msg.substring(i, Math.min(msg.length(), i+LOG_LEN)));
         }
+    }
+
+    void loge(Exception e) {
+        if (configs.showLog)
+            Log.e(TAG, Log.getStackTraceString(e));
     }
 
     // Log packets of bytes directly
