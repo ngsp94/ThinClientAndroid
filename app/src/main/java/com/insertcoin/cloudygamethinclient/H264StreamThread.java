@@ -1,9 +1,11 @@
 package com.insertcoin.cloudygamethinclient;
 
+import android.net.wifi.WifiConfiguration;
 import android.util.Log;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.ByteBuffer;
@@ -41,13 +43,26 @@ public class H264StreamThread extends Thread {
         try {
             stream.close();
         } catch (IOException e) {
-            log(Log.getStackTraceString(e));
+            loge(Log.getStackTraceString(e));
         }
     }
 
     public void run() {
+        // use HTTP
+
         try {
-            URLConnection conn = (new URL(configs.ip)).openConnection();
+            URL url = new URL("http", configs.ip, configs.streamPort0, "");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            int response = conn.getResponseCode();
+            /*
+            while (response != HttpURLConnection.HTTP_OK) {
+                log("Response: " + response);
+                sleep(100);
+                conn = (HttpURLConnection) url.openConnection();
+                response = conn.getResponseCode();
+            }
+            */
+
             stream = new BufferedInputStream(conn.getInputStream());
             do {
                 byte[] packet = nextPacket();
@@ -58,7 +73,7 @@ public class H264StreamThread extends Thread {
                 }
             } while (sps == null || pps == null);
         } catch (IOException e) {
-            e.printStackTrace();
+            loge(Log.getStackTraceString(e));
         }
     }
 
@@ -108,6 +123,22 @@ public class H264StreamThread extends Thread {
         if (configs.showLog) {
             for (int i = 0; i <= msg.length(); i += LOG_LEN)
                 Log.d(TAG, msg.substring(i, Math.min(msg.length(), i+LOG_LEN)));
+        }
+    }
+
+    void loge(String msg) {
+        if (configs.showLog) {
+            for (int i = 0; i <= msg.length(); i += LOG_LEN)
+                Log.e(TAG, msg.substring(i, Math.min(msg.length(), i + LOG_LEN)));
+        }
+    }
+
+    // Less verbose sleep function
+    void sleep(int millisec) {
+        try {
+            Thread.sleep(millisec);
+        } catch (InterruptedException e) {
+            log(Log.getStackTraceString(e));
         }
     }
 
