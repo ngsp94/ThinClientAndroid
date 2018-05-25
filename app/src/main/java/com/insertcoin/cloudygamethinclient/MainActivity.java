@@ -63,42 +63,43 @@ public class MainActivity extends AppCompatActivity
     }
 
     @Override
-    public void onSurfaceTextureSizeChanged(SurfaceTexture surfaceTexture, int i, int i1) {
-        log("texture changed, decoding cancelled!");
-        GameSignal sendQuit = new GameSignal(configs, 0, GameSignal.Cmd.QUIT);
-        Thread quitThread = new Thread(sendQuit);
-        quitThread.start();
-        try {
-            quitThread.join();
-        } catch (InterruptedException e) {
-            loge(e);
-        }
-        decodeTask.cancel(false);
+    public void onSurfaceTextureSizeChanged(SurfaceTexture tex, int w, int h) {
     }
 
     @Override
     public boolean onSurfaceTextureDestroyed(SurfaceTexture surfaceTexture) {
-        // This is triggered by back button, menu button etc
-        // Can send quit signal here
-        log("texture destroyed, decoding cancelled!");
-        GameSignal sendQuit = new GameSignal(configs, 0, GameSignal.Cmd.QUIT);
-        Thread quitThread = new Thread(sendQuit);
-        quitThread.start();
-        try {
-            quitThread.join();
-        } catch (InterruptedException e) {
-            loge(e);
-        }
-        decodeTask.cancel(false);
+        quitGame();
         return false;
     }
 
     @Override
     public void onSurfaceTextureUpdated(SurfaceTexture surfaceTexture) {
+    }
 
+    @Override
+    public void onBackPressed() {
+        quitGame();
+    }
+
+    // Quit game, clean up and stop app
+    public void quitGame() {
+        GameSignal sendQuit = new GameSignal(configs, 0, GameSignal.Cmd.QUIT);
+        Thread quitThread = new Thread(sendQuit);
+        quitThread.start();
+        try {
+            quitThread.join();
+        } catch (InterruptedException e) {
+            loge(e);
+        }
+        decodeTask.stopped = true;
+        while (!decodeTask.done)
+            sleep(100);
+        System.exit(0);
     }
 
     private class DecodeTask extends AsyncTask<Void, Void, Void> {
+        boolean stopped = false;
+        boolean done = false;
         byte[] frame;
         ArrayBlockingQueue<Integer> inputIndices = new ArrayBlockingQueue<>(30);
 
@@ -118,13 +119,14 @@ public class MainActivity extends AppCompatActivity
 
             decoder.setCallback(new MediaCodec.Callback() {
                 @Override
-                public void onInputBufferAvailable(@NonNull MediaCodec mc, int i) {
+                public void onInputBufferAvailable(
+                        @NonNull MediaCodec mc, int i) {
                     inputIndices.add(i);
                 }
 
                 @Override
-                public void onOutputBufferAvailable(@NonNull MediaCodec mc, int i,
-                                                    @NonNull MediaCodec.BufferInfo bufferInfo) {
+                public void onOutputBufferAvailable(@NonNull MediaCodec mc,
+                        int i, @NonNull MediaCodec.BufferInfo bufferInfo) {
                     decoder.releaseOutputBuffer(i, true);
                 }
 
@@ -135,16 +137,15 @@ public class MainActivity extends AppCompatActivity
                 }
 
                 @Override
-                public void onOutputFormatChanged(@NonNull MediaCodec mediaCodec,
-                                                  @NonNull MediaFormat mediaFormat) {
-
+                public void onOutputFormatChanged(
+                        @NonNull MediaCodec mc, @NonNull MediaFormat mf) {
                 }
             });
 
             Surface surface = new Surface(texView.getSurfaceTexture());
             decoder.configure(format, surface, null, 0);
             decoder.start();
-            while (!isCancelled()) {
+            while (!stopped) {
                 try {
                     frame = streamThread.nextPacket();
                     int i = inputIndices.take();
@@ -162,10 +163,11 @@ public class MainActivity extends AppCompatActivity
             decoder.stop();
             decoder.release();
             streamThread.close();
+            log("streaming clean up successful!");
+            done = true;
             return null;
         }
     }
-
 
     /* Helper methods */
 

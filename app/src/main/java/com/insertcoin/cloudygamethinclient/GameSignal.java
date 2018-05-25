@@ -29,6 +29,7 @@ public class GameSignal implements Runnable {
             Socket socket = new Socket(conf.ip, conf.signalPort); // TCP
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
             out.println(signal.toString());
+            out.close();
             socket.close();
         } catch (Exception e) {
             loge(e);
