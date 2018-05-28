@@ -15,16 +15,29 @@ public class GameCtrl implements Runnable {
     DatagramPacket packet;
     MainActivity.Conf conf;
     Type type;
+    int keyCode;
+    int charCode;
+    int event;
     int[] mouseMov;
     float[] mousePos;
 
     enum Type {NONE, KEYBOARD, MOUSE};
+    enum Event {DUMMY0, DUMMY1, KEY_DOWN, KEY_UP};
 
-    public GameCtrl(MainActivity.Conf conf, int[] mov, float[] pos) {
+    GameCtrl(MainActivity.Conf conf, int[] mov, float[] pos) {
         type = Type.MOUSE;
         this.conf = conf;
         mouseMov = mov;
         mousePos = pos;
+    }
+
+    GameCtrl(MainActivity.Conf conf, int keyCode, int event) {
+        type = Type.KEYBOARD;
+        this.conf = conf;
+        this.keyCode = keyCode;
+        // key & char only happen to be the same for the keys used here!
+        this.charCode = keyCode;
+        this.event = event;
     }
 
     @Override
@@ -47,6 +60,9 @@ public class GameCtrl implements Runnable {
         out.write((byte) conf.ctrlId);
         switch (type) {
             case KEYBOARD:
+                out.write(toByteArray(keyCode, 2), 0, 2);
+                out.write(toByteArray(charCode, 2), 0, 2);
+                out.write((byte) event);
                 break;
             case MOUSE:
                 byte[] xMov = toByteArray(mouseMov[0], 2);
@@ -92,5 +108,9 @@ public class GameCtrl implements Runnable {
         for (int i = precision-1; i >= 0; i--)
             result[i] = (byte) (num >> (i*8));
         return result;
+    }
+
+    class Key {
+        static final int MOUSE_BTN = 1;
     }
 }

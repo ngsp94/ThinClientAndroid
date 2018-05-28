@@ -47,7 +47,8 @@ public class H264StreamThread extends Thread {
 
     public void run() {
         try {
-            URL url = new URL("http", configs.ip, configs.streamPort0, "");
+            int port = configs.streamPort0 + configs.ctrlId;
+            URL url = new URL("http", configs.ip, port, "");
             URLConnection conn = url.openConnection();
             stream = new BufferedInputStream(conn.getInputStream());
             do {

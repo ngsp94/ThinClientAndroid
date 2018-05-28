@@ -13,10 +13,10 @@ import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.TextureView;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -114,6 +114,34 @@ public class MainActivity extends AppCompatActivity
         while (!decodeTask.done)
             sleep(100);
         System.exit(0);
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent motionEvent)
+    {
+        int action = motionEvent.getAction();
+        switch (action) {
+            case MotionEvent.ACTION_DOWN: {
+                int keyCode = GameCtrl.Key.MOUSE_BTN;
+                int event = GameCtrl.Event.KEY_DOWN.ordinal();
+                GameCtrl sendCtrl = new GameCtrl(configs, keyCode, event);
+                Thread ctrlThread = new Thread(sendCtrl);
+                ctrlThread.start();
+                return true;
+            }
+
+            case MotionEvent.ACTION_UP: { // curly brackets prevent compiler err
+                int keyCode = GameCtrl.Key.MOUSE_BTN;
+                int event = GameCtrl.Event.KEY_UP.ordinal();
+                GameCtrl sendCtrl = new GameCtrl(configs, keyCode, event);
+                Thread ctrlThread = new Thread(sendCtrl);
+                ctrlThread.start();
+                return true;
+            }
+
+            default:
+                return true;
+        }
     }
 
     @Override
@@ -252,7 +280,7 @@ public class MainActivity extends AppCompatActivity
         private static final String STREAM_PORT0 = "streamPort0";
         private static final String SIGNAL_PORT = "signalPort";
         private static final String CTRL_PORT = "ctrlPort";
-        private static final String CTRL_ID = "gameId";
+        private static final String CTRL_ID = "ctrlId";
         private static final String GAME_ID = "gameId";
         private static final String SESSION_ID = "sessionId";
         private static final String VERSION = "version";
