@@ -19,9 +19,11 @@ The following settings are optional.
 |-------------|---------|-------------|-----------------------------------|
 | streamPort0 | int     | ```30000``` | video stream port of first player |
 | signalPort  | int     | ```55556``` | port to send join/quit signals    |
-| ctrlPort    | int     | ```55555``` | port to send game actions         |
+| ctrlPort    | int     | ```55555``` | port to send game control actions |
+| ctrlId      | int     | ```0```     | controller id to identify player  |
 | gameId      | int     | ```1```     | game ID (not used)                |
 | sessionId   | int     | ```1```     | session ID (not used)             |
+| version     | int     | ```0```     | packet protocol version (not used)|
 | width       | int     | ```1280```  | width of the video stream         |
 | height      | int     | ```720```   | height of the video stream        |
 | showLog     | boolean | ```false``` | to turn log on and off            |
