@@ -12,13 +12,11 @@ public class GameSignal implements Runnable {
     JSONObject signal;
     MainActivity.Conf conf;
     Cmd cmd;
-    int ctrlId;
 
     enum Cmd {JOIN, QUIT};
 
-    GameSignal(MainActivity.Conf conf, int ctrlId, Cmd cmd) {
+    GameSignal(MainActivity.Conf conf, Cmd cmd) {
         this.conf = conf;
-        this.ctrlId = ctrlId;
         this.cmd = cmd;
     }
 
@@ -40,14 +38,14 @@ public class GameSignal implements Runnable {
         signal = new JSONObject();
         if (cmd == Cmd.JOIN) {
             signal.put("command", "join");
-            signal.put("controller", ctrlId);
-            signal.put("streaming_port", conf.streamPort0 + ctrlId);
+            signal.put("controller", conf.ctrlId);
+            signal.put("streaming_port", conf.streamPort0 + conf.ctrlId);
             signal.put("streaming_ip", conf.ip);
             signal.put("game_id", conf.gameId);
             signal.put("game_session_id", conf.sessionId);
         } else { // QUIT
             signal.put("command", "quit");
-            signal.put("controller", ctrlId);
+            signal.put("controller", conf.ctrlId);
         }
     }
 

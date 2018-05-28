@@ -1,6 +1,11 @@
 package com.insertcoin.cloudygamethinclient;
 
+import android.content.Context;
 import android.graphics.SurfaceTexture;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.media.MediaCodec;
 import android.media.MediaFormat;
 import android.os.AsyncTask;
@@ -10,6 +15,8 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.Surface;
 import android.view.TextureView;
+
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -17,16 +24,22 @@ import java.util.Properties;
 import java.util.concurrent.ArrayBlockingQueue;
 
 public class MainActivity extends AppCompatActivity
-        implements TextureView.SurfaceTextureListener{
+        implements TextureView.SurfaceTextureListener, SensorEventListener{
 
     static final String TAG = "Main";
     static final String AVC = MediaFormat.MIMETYPE_VIDEO_AVC;
+    static final float GYRO_THRESHOLD = 0.05f;
+    static final float GYRO_SCALE = 0.2f;
 
     Conf configs;
     H264StreamThread streamThread;
     DecodeTask decodeTask;
     MediaCodec decoder;
     TextureView texView;
+    SensorManager manager;
+    Sensor gyro;
+    float[] gyroVals;
+    float[] mousePos;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,11 +58,17 @@ public class MainActivity extends AppCompatActivity
         }
 
         log("starting...");
-        GameSignal sendJoin = new GameSignal(configs, 0, GameSignal.Cmd.JOIN);
+        GameSignal sendJoin = new GameSignal(configs, GameSignal.Cmd.JOIN);
         Thread joinThread = new Thread(sendJoin);
         joinThread.start();
         streamThread = new H264StreamThread(configs);
         streamThread.start();
+
+        gyroVals = new float[]{0, 0, 0};
+        mousePos = new float[]{configs.width / 2, configs.height / 2};
+        manager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        gyro = manager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+        manager.registerListener(this, gyro, SensorManager.SENSOR_DELAY_NORMAL);
     }
 
     @Override
@@ -83,7 +102,7 @@ public class MainActivity extends AppCompatActivity
 
     // Quit game, clean up and stop app
     public void quitGame() {
-        GameSignal sendQuit = new GameSignal(configs, 0, GameSignal.Cmd.QUIT);
+        GameSignal sendQuit = new GameSignal(configs, GameSignal.Cmd.QUIT);
         Thread quitThread = new Thread(sendQuit);
         quitThread.start();
         try {
@@ -95,6 +114,33 @@ public class MainActivity extends AppCompatActivity
         while (!decodeTask.done)
             sleep(100);
         System.exit(0);
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent sensorEvent) {
+        Sensor sensor = sensorEvent.sensor;
+        if (sensor.getType() == Sensor.TYPE_GYROSCOPE) {
+            float[] diff = minus(sensorEvent.values, gyroVals);
+
+            if (Math.abs(diff[0]) > GYRO_THRESHOLD ||
+                    Math.abs(diff[1]) > GYRO_THRESHOLD) {
+
+                double x_mov = -GYRO_SCALE * diff[0] * configs.width;
+                double y_mov = GYRO_SCALE * diff[1] * configs.height;
+                int[] mouseMov = {(int) x_mov, (int) y_mov};
+                mousePos[0] -= x_mov;
+                mousePos[1] += y_mov;
+
+                GameCtrl sendCtrl = new GameCtrl(configs, mouseMov, mousePos);
+                Thread ctrlThread = new Thread(sendCtrl);
+                ctrlThread.start();
+            }
+        }
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int i) {
+
     }
 
     private class DecodeTask extends AsyncTask<Void, Void, Void> {
@@ -191,6 +237,14 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
+   // Element-wise subtraction
+    float[] minus(float[] a, float[] b) {
+        float[] result = new float[a.length];
+        for (int i=0; i<a.length; i++)
+            result[i] = a[i] - b[i];
+        return result;
+    }
+
     /* Configurations for this app */
     class Conf{
         // keys
@@ -198,8 +252,10 @@ public class MainActivity extends AppCompatActivity
         private static final String STREAM_PORT0 = "streamPort0";
         private static final String SIGNAL_PORT = "signalPort";
         private static final String CTRL_PORT = "ctrlPort";
+        private static final String CTRL_ID = "gameId";
         private static final String GAME_ID = "gameId";
         private static final String SESSION_ID = "sessionId";
+        private static final String VERSION = "version";
         private static final String SHOW_LOG = "showLog";
         private static final String WIDTH = "width";
         private static final String HEIGHT = "height";
@@ -209,8 +265,10 @@ public class MainActivity extends AppCompatActivity
         public int streamPort0 = 30000;
         public int signalPort = 55556;
         public int ctrlPort = 55555;
+        public int ctrlId = 0;
         public int gameId = 1;
         public int sessionId = 1;
+        public int version = 0;
         public boolean showLog = false;
         public int width = 1280;
         public int height = 720;
@@ -232,10 +290,14 @@ public class MainActivity extends AppCompatActivity
                 signalPort = Integer.parseInt(prop.getProperty(SIGNAL_PORT));
             if (prop.containsKey(CTRL_PORT))
                 ctrlPort = Integer.parseInt(prop.getProperty(CTRL_PORT));
+            if (prop.containsKey(CTRL_ID))
+                ctrlId = Integer.parseInt(prop.getProperty(CTRL_ID));
             if (prop.containsKey(GAME_ID))
                 gameId = Integer.parseInt(prop.getProperty(GAME_ID));
             if (prop.containsKey(SESSION_ID))
                 sessionId = Integer.parseInt(prop.getProperty(SESSION_ID));
+            if (prop.containsKey(VERSION))
+                version = Integer.parseInt(prop.getProperty(VERSION));
             if (prop.containsKey(SHOW_LOG))
                 showLog = Boolean.parseBoolean(prop.getProperty(SHOW_LOG));
             if (prop.containsKey(WIDTH))
