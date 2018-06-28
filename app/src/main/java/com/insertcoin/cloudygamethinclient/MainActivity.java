@@ -1,21 +1,22 @@
 package com.insertcoin.cloudygamethinclient;
 
-import android.content.Context;
 import android.graphics.SurfaceTexture;
-import android.hardware.Sensor;
-import android.hardware.SensorEvent;
-import android.hardware.SensorEventListener;
-import android.hardware.SensorManager;
 import android.media.MediaCodec;
 import android.media.MediaFormat;
 import android.os.AsyncTask;
 import android.support.annotation.NonNull;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.TextureView;
+import android.view.View;
+
+import com.google.vr.sdk.base.Eye;
+import com.google.vr.sdk.base.GvrActivity;
+import com.google.vr.sdk.base.GvrView;
+import com.google.vr.sdk.base.HeadTransform;
+import com.google.vr.sdk.base.Viewport;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,22 +24,20 @@ import java.nio.ByteBuffer;
 import java.util.Properties;
 import java.util.concurrent.ArrayBlockingQueue;
 
-public class MainActivity extends AppCompatActivity
-        implements TextureView.SurfaceTextureListener, SensorEventListener{
+import javax.microedition.khronos.egl.EGLConfig;
+
+public class MainActivity extends GvrActivity
+        implements TextureView.SurfaceTextureListener, GvrView.StereoRenderer {
 
     static final String TAG = "Main";
     static final String AVC = MediaFormat.MIMETYPE_VIDEO_AVC;
-    static final float GYRO_THRESHOLD = 0.05f;
-    static final float GYRO_SCALE = 0.2f;
+    static final int TURN_THRESHOLD = 2; // in pixels
 
     Conf configs;
     H264StreamThread streamThread;
     DecodeTask decodeTask;
     MediaCodec decoder;
     TextureView texView;
-    SensorManager manager;
-    Sensor gyro;
-    float[] gyroVals;
     float[] mousePos;
 
     @Override
@@ -64,11 +63,10 @@ public class MainActivity extends AppCompatActivity
         streamThread = new H264StreamThread(configs);
         streamThread.start();
 
-        gyroVals = new float[]{0, 0, 0};
         mousePos = new float[]{configs.width / 2, configs.height / 2};
-        manager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-        gyro = manager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
-        manager.registerListener(this, gyro, SensorManager.SENSOR_DELAY_NORMAL);
+        GvrView gvrView = findViewById(R.id.gvr_view);
+        gvrView.setRenderer(this);
+        gvrView.setVisibility(View.INVISIBLE);
     }
 
     @Override
@@ -145,29 +143,55 @@ public class MainActivity extends AppCompatActivity
     }
 
     @Override
-    public void onSensorChanged(SensorEvent sensorEvent) {
-        Sensor sensor = sensorEvent.sensor;
-        if (sensor.getType() == Sensor.TYPE_GYROSCOPE) {
-            float[] diff = minus(sensorEvent.values, gyroVals);
+    public void onNewFrame(HeadTransform headTransform) {
+        float[] angles = {0, 0, 0}; // in rad
+        int offset = 0;
+        headTransform.getEulerAngles(angles, offset);
 
-            if (Math.abs(diff[0]) > GYRO_THRESHOLD ||
-                    Math.abs(diff[1]) > GYRO_THRESHOLD) {
+        // angles have huge discontinuity from 180 to -180 deg
+        int[] newPos = {-(int)(configs.width * angles[1] / (2.0 * Math.PI)),
+                        -(int)(configs.height * Math.sin(angles[0]*0.5))};
 
-                double x_mov = -GYRO_SCALE * diff[0] * configs.width;
-                double y_mov = GYRO_SCALE * diff[1] * configs.height;
-                int[] mouseMov = {(int) x_mov, (int) y_mov};
-                mousePos[0] -= x_mov;
-                mousePos[1] += y_mov;
+        int[] mouseMov = {  newPos[0] - (int)mousePos[0],
+                            newPos[1] - (int)mousePos[1]};
 
-                GameCtrl sendCtrl = new GameCtrl(configs, mouseMov, mousePos);
-                Thread ctrlThread = new Thread(sendCtrl);
-                ctrlThread.start();
+        // only accurate if the top, bottom, left and right of screen
+        // correspond to y = 90, -90 and x = -180, 180 degrees respectively
+        for (int i=0; i<mouseMov.length; i++) {
+            if (Math.abs(mouseMov[i]) > configs.width * 0.99 // discontinuity
+                    || Math.abs(mouseMov[i]) < TURN_THRESHOLD) { // sensor drift
+                mouseMov[i] = 0;
             }
+            mousePos[i] = newPos[i];
         }
+
+        GameCtrl sendCtrl = new GameCtrl(configs, mouseMov, mousePos);
+        Thread ctrlThread = new Thread(sendCtrl);
+        ctrlThread.start();
     }
 
     @Override
-    public void onAccuracyChanged(Sensor sensor, int i) {
+    public void onDrawEye(Eye eye) {
+
+    }
+
+    @Override
+    public void onFinishFrame(Viewport viewport) {
+
+    }
+
+    @Override
+    public void onSurfaceChanged(int w, int h) {
+
+    }
+
+    @Override
+    public void onSurfaceCreated(EGLConfig eglConfig) {
+
+    }
+
+    @Override
+    public void onRendererShutdown() {
 
     }
 
@@ -195,7 +219,7 @@ public class MainActivity extends AppCompatActivity
                 @Override
                 public void onInputBufferAvailable(
                         @NonNull MediaCodec mc, int i) {
-                    inputIndices.add(i);
+                        inputIndices.add(i);
                 }
 
                 @Override
@@ -263,14 +287,6 @@ public class MainActivity extends AppCompatActivity
         } catch (InterruptedException e) {
             loge(e);
         }
-    }
-
-   // Element-wise subtraction
-    float[] minus(float[] a, float[] b) {
-        float[] result = new float[a.length];
-        for (int i=0; i<a.length; i++)
-            result[i] = a[i] - b[i];
-        return result;
     }
 
     /* Configurations for this app */
